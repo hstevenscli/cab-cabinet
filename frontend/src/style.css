@@ -119,6 +119,41 @@ body {
   font-size: 14px;
 }
 
+.tool-sub {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 2px 0 4px 10px;
+}
+
+.tool-sub-label {
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.style-opt {
+  text-align: left;
+  border: 1px solid var(--line);
+  background: #10161f;
+  color: var(--text);
+  border-radius: 6px;
+  padding: 7px 10px;
+  cursor: pointer;
+  font-size: 12px;
+  font-family: inherit;
+}
+
+.style-opt.active,
+.style-opt:hover {
+  border-color: var(--accent);
+}
+
+.style-opt.active {
+  background: #2b3952;
+}
+
 .tool-blurb {
   display: block;
   margin-top: 4px;
@@ -155,6 +190,18 @@ body {
   background: #10161f;
   color: var(--text);
   padding: 0 8px;
+}
+
+.field select {
+  height: 28px;
+  max-width: 150px;
+  border-radius: 4px;
+  border: 1px solid var(--line);
+  background: #10161f;
+  color: var(--text);
+  padding: 0 8px;
+  font-family: inherit;
+  font-size: 12px;
 }
 
 .unit {
@@ -296,6 +343,10 @@ body {
 
 .label.cabinet-dims {
   font-size: 2.6px;
+}
+
+.label.cabinet-style {
+  font-size: 2.4px;
 }
 
 .drag-handle {

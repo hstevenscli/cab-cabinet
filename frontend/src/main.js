@@ -27,6 +27,12 @@ const GRID_MINOR = 12;
 const GRID_MAJOR = 48;
 const DEFAULT_WALL = { thickness: 4.5, height: 96, side: -1 };
 const DEFAULT_CABINET = { width: 24, depth: 24, height: 34.5 };
+const CABINET_STYLES = [
+    { id: "standard", name: "Standard base", short: "B" },
+    { id: "drawers", name: "Bank of drawers", short: "BD" },
+    { id: "sink", name: "Base sink", short: "BS" },
+];
+const DEFAULT_CABINET_STYLE = "standard";
 
 const state = {
     tool: "pointer",
@@ -36,6 +42,7 @@ const state = {
     drawing: null,
     hover: null,
     dragging: null,
+    cabinetStyle: DEFAULT_CABINET_STYLE,
     view: { panX: 48, panY: 48, scale: PX_PER_INCH },
     panning: null,
 };
@@ -96,7 +103,7 @@ const TOOLS = [
     {
         id: "cabinet",
         label: "Cabinets",
-        blurb: "Click to drop. Back snaps flush within 1 ft of a wall. Drag the dot to move.",
+        blurb: "Pick a style, then click to drop. Back snaps flush within 1 ft of a wall. Drag the dot to move.",
     },
 ];
 
@@ -113,6 +120,14 @@ function nextCabinetId() {
 
 function nextWallId() {
     return nextFreeId(state.walls.map((w) => w.id));
+}
+
+function cabinetStyleName(style) {
+    return CABINET_STYLES.find((s) => s.id === style)?.name ?? CABINET_STYLES[0].name;
+}
+
+function cabinetStyleShort(style) {
+    return CABINET_STYLES.find((s) => s.id === style)?.short ?? CABINET_STYLES[0].short;
 }
 
 function setTool(id) {
@@ -162,7 +177,7 @@ function defaultStatus() {
             : "Click to start a wall. Snaps to corners or 1 ft grid. Space flips side.";
     }
     if (state.tool === "cabinet") {
-        return "Click to place a cabinet (snaps within 1 ft of a wall). Drag a cabinet's center dot to move it.";
+        return `Click to place a ${cabinetStyleName(state.cabinetStyle)} (snaps within 1 ft of a wall). Drag a cabinet's center dot to move it.`;
     }
     return "";
 }
@@ -358,6 +373,7 @@ function cabinetFromClick(point, id = nextCabinetId()) {
             width: DEFAULT_CABINET.width,
             depth: DEFAULT_CABINET.depth,
             height: DEFAULT_CABINET.height,
+            style: state.cabinetStyle,
             x: null,
             y: null,
             rotation: 0,
@@ -371,6 +387,7 @@ function cabinetFromClick(point, id = nextCabinetId()) {
         width: DEFAULT_CABINET.width,
         depth: DEFAULT_CABINET.depth,
         height: DEFAULT_CABINET.height,
+        style: state.cabinetStyle,
         x: point.x,
         y: point.y,
         rotation: 0,
@@ -559,11 +576,31 @@ function renderTools() {
         <span class="tool-name">${tool.label}</span>
         <span class="tool-blurb">${tool.blurb}</span>
       </button>
+      ${tool.id === "cabinet" && state.tool === "cabinet" ? cabinetStyleMenu() : ""}
     `
     ).join("");
     toolsEl.querySelectorAll(".tool").forEach((btn) => {
         btn.addEventListener("click", () => setTool(btn.dataset.tool));
     });
+    toolsEl.querySelectorAll(".style-opt").forEach((btn) => {
+        btn.addEventListener("click", () => {
+            state.cabinetStyle = btn.dataset.style;
+            setTool("cabinet");
+        });
+    });
+}
+
+function cabinetStyleMenu() {
+    return `
+      <div class="tool-sub">
+        <span class="tool-sub-label">Style</span>
+        ${CABINET_STYLES.map(
+            (s) => `
+          <button type="button" class="style-opt ${state.cabinetStyle === s.id ? "active" : ""}" data-style="${s.id}">${s.name}</button>
+        `
+        ).join("")}
+      </div>
+    `;
 }
 
 function numField(label, name, value, opts = {}) {
@@ -613,14 +650,26 @@ function renderProps() {
         return;
     }
     const mount = cabinet.wallId ? `snapped to wall ${cabinet.wallId}` : "freestanding";
+    const currentStyle = cabinet.style ?? DEFAULT_CABINET_STYLE;
     propsEl.innerHTML = `
-    <div class="props-title">Cabinet ${cabinet.id}</div>
+    <div class="props-title">Cabinet ${cabinet.id} · ${cabinetStyleName(currentStyle)}</div>
     <p class="hint">${mount}</p>
+    <label class="field">
+      <span>Style</span>
+      <span class="field-input">
+        <select name="style" id="cabinet-style-select">
+          ${CABINET_STYLES.map((s) => `<option value="${s.id}" ${s.id === currentStyle ? "selected" : ""}>${s.name}</option>`).join("")}
+        </select>
+      </span>
+    </label>
     ${numField("Width", "width", roundInput(cabinet.width))}
     ${numField("Depth", "depth", roundInput(cabinet.depth))}
     ${numField("Height", "height", roundInput(cabinet.height))}
   `;
     bindPropInputs((name, value) => updateCabinet(cabinet.id, { [name]: value }));
+    document.getElementById("cabinet-style-select")?.addEventListener("change", (event) => {
+        updateCabinet(cabinet.id, { style: event.target.value });
+    });
 }
 
 function roundInput(value) {
@@ -738,13 +787,15 @@ function cabinetMarkup(cabinet, preview) {
     const dims = `${roundInput(cabinet.width)} × ${roundInput(cabinet.depth)}`;
     const cx = (corners.bl.x + corners.br.x + corners.fr.x + corners.fl.x) / 4;
     const cy = (corners.bl.y + corners.br.y + corners.fr.y + corners.fl.y) / 4;
-    const idLabel = preview ? "" : `<text class="label cabinet-id" x="${cx}" y="${cy - 2.4}" text-anchor="middle" dominant-baseline="middle">#${cabinet.id}</text>`;
-    const dimsY = preview ? cy : cy + 2.8;
+    const topLabel = preview
+        ? `<text class="label cabinet-style" x="${cx}" y="${cy - 2.2}" text-anchor="middle" dominant-baseline="middle">${cabinetStyleShort(cabinet.style)}</text>`
+        : `<text class="label cabinet-id" x="${cx}" y="${cy - 2.4}" text-anchor="middle" dominant-baseline="middle">#${cabinet.id} ${cabinetStyleShort(cabinet.style)}</text>`;
+    const dimsY = preview ? cy + 2.2 : cy + 2.8;
     return `
     <g class="item cabinet ${selected ? "selected" : ""} ${preview ? "preview" : ""}" data-type="cabinet" data-id="${cabinet.id}">
       <path d="${poly}" />
       <path class="back-edge" d="${back}" />
-      ${idLabel}
+      ${topLabel}
       <text class="label cabinet-dims" x="${cx}" y="${dimsY}" text-anchor="middle" dominant-baseline="middle">${dims}</text>
     </g>
   `;
