@@ -213,6 +213,18 @@ body {
   cursor: default;
 }
 
+#plan.is-dragging {
+  cursor: grabbing;
+}
+
+#plan.is-dragging .item.cabinet.selected path {
+  stroke-width: 1.4;
+}
+
+#plan.is-dragging .item.wall.selected path {
+  stroke-width: 1.4;
+}
+
 .snap-mark {
   fill: #8fd0b0;
   stroke: #0b0f14;
@@ -275,4 +287,44 @@ body {
   font-size: 3px;
   pointer-events: none;
   font-family: "Segoe UI", sans-serif;
+}
+
+.label.cabinet-id {
+  font-size: 3.4px;
+  font-weight: 700;
+}
+
+.label.cabinet-dims {
+  font-size: 2.6px;
+}
+
+.drag-handle {
+  fill: #0b0f14;
+  stroke: var(--accent);
+  stroke-width: 0.6;
+  cursor: grab;
+  opacity: 0.9;
+}
+
+.drag-handle.selected {
+  fill: var(--accent);
+  stroke: #0b0f14;
+}
+
+.drag-handle.active {
+  cursor: grabbing;
+  fill: var(--accent);
+}
+
+.wall-handle {
+  fill: #0b0f14;
+  stroke: var(--accent-2);
+  stroke-width: 0.6;
+  cursor: grab;
+  opacity: 0.9;
+}
+
+.wall-handle.active {
+  cursor: grabbing;
+  fill: var(--accent-2);
 }

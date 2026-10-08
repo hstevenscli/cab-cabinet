@@ -329,3 +329,123 @@ export function formatInches(value) {
   if (Number.isInteger(rounded)) return `${rounded}"`;
   return `${rounded}"`;
 }
+
+function polyCenter(poly) {
+  let x = 0;
+  let y = 0;
+  for (const p of poly) {
+    x += p.x;
+    y += p.y;
+  }
+  return { x: x / poly.length, y: y / poly.length };
+}
+
+/** SAT overlap test for convex polygons (cabinets are rectangles).
+ *  Returns MTV to push polyA out of polyB. Touching (depth 0) counts as no overlap. */
+export function polygonsOverlapSAT(polyA, polyB) {
+  let bestOverlap = Infinity;
+  let bestAxis = null;
+  for (const poly of [polyA, polyB]) {
+    for (let i = 0; i < poly.length; i++) {
+      const p1 = poly[i];
+      const p2 = poly[(i + 1) % poly.length];
+      const ex = p2.x - p1.x;
+      const ey = p2.y - p1.y;
+      const len = hypot(ex, ey) || 1;
+      const axis = { x: -ey / len, y: ex / len };
+      let minA = Infinity;
+      let maxA = -Infinity;
+      let minB = Infinity;
+      let maxB = -Infinity;
+      for (const p of polyA) {
+        const d = p.x * axis.x + p.y * axis.y;
+        if (d < minA) minA = d;
+        if (d > maxA) maxA = d;
+      }
+      for (const p of polyB) {
+        const d = p.x * axis.x + p.y * axis.y;
+        if (d < minB) minB = d;
+        if (d > maxB) maxB = d;
+      }
+      const overlap = Math.min(maxA, maxB) - Math.max(minA, minB);
+      if (overlap <= 1e-9) return { overlap: false, depth: 0, nx: 0, ny: 0 };
+      if (overlap < bestOverlap) {
+        bestOverlap = overlap;
+        bestAxis = axis;
+      }
+    }
+  }
+  const cA = polyCenter(polyA);
+  const cB = polyCenter(polyB);
+  if ((cA.x - cB.x) * bestAxis.x + (cA.y - cB.y) * bestAxis.y < 0) {
+    bestAxis = { x: -bestAxis.x, y: -bestAxis.y };
+  }
+  return { overlap: true, depth: bestOverlap, nx: bestAxis.x, ny: bestAxis.y };
+}
+
+function pointSegClosest(p, a, b) {
+  const abx = b.x - a.x;
+  const aby = b.y - a.y;
+  const len2 = abx * abx + aby * aby || 1e-9;
+  const t = clamp(((p.x - a.x) * abx + (p.y - a.y) * aby) / len2, 0, 1);
+  const qx = a.x + abx * t;
+  const qy = a.y + aby * t;
+  return { dist: hypot(p.x - qx, p.y - qy), qx, qy };
+}
+
+/** Minimal translation to move polyA into contact with polyB (assumes no overlap).
+ *  Returns gap distance and vector (vx, vy) to apply to polyA. */
+export function polygonGapVector(polyA, polyB) {
+  let best = { dist: Infinity, vx: 0, vy: 0 };
+  for (const p of polyA) {
+    for (let i = 0; i < polyB.length; i++) {
+      const a = polyB[i];
+      const b = polyB[(i + 1) % polyB.length];
+      const { dist, qx, qy } = pointSegClosest(p, a, b);
+      if (dist < best.dist) best = { dist, vx: qx - p.x, vy: qy - p.y };
+    }
+  }
+  for (const p of polyB) {
+    for (let i = 0; i < polyA.length; i++) {
+      const a = polyA[i];
+      const b = polyA[(i + 1) % polyA.length];
+      const { dist, qx, qy } = pointSegClosest(p, a, b);
+      if (dist < best.dist) best = { dist, vx: p.x - qx, vy: p.y - qy };
+    }
+  }
+  return best;
+}
+
+/** Reassign cabinet ids 1..N in positional order and return old->new map.
+ *  Wall-hung cabinets come first (grouped by wall, ordered along the wall's
+ *  dominant world axis so the lowest x — or y for vertical walls — is #lowest),
+ *  then freestanding cabinets left-to-right, top-to-bottom. */
+export function renumberCabinetIds(cabinets, walls) {
+  const backOf = (cab) => cabinetCorners(cab, walls).back;
+  const sorted = [...cabinets].sort((a, b) => {
+    const aw = a.wallId != null ? walls.find((w) => w.id === a.wallId) : null;
+    const bw = b.wallId != null ? walls.find((w) => w.id === b.wallId) : null;
+    if ((aw != null) !== (bw != null)) return aw != null ? -1 : 1;
+    if (aw && bw) {
+      if (a.wallId !== b.wallId) return a.wallId - b.wallId;
+      const horiz = Math.abs(aw.x2 - aw.x1) >= Math.abs(aw.y2 - aw.y1);
+      const pa = backOf(a);
+      const pb = backOf(b);
+      const ka = horiz ? pa.x : pa.y;
+      const kb = horiz ? pb.x : pb.y;
+      if (ka !== kb) return ka - kb;
+      const ja = horiz ? pa.y : pa.x;
+      const jb = horiz ? pb.y : pb.x;
+      if (ja !== jb) return ja - jb;
+      return a.id - b.id;
+    }
+    const pa = backOf(a);
+    const pb = backOf(b);
+    if (pa.x !== pb.x) return pa.x - pb.x;
+    if (pa.y !== pb.y) return pa.y - pb.y;
+    return a.id - b.id;
+  });
+  const oldToNew = new Map(sorted.map((cab, i) => [cab.id, i + 1]));
+  for (const cab of sorted) cab.id = oldToNew.get(cab.id);
+  return oldToNew;
+}
